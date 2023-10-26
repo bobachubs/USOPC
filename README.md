@@ -1,0 +1,2 @@
+# USOPC
+Competition
