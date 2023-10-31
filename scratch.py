@@ -19,8 +19,40 @@ data = data[['Gender', 'Country', 'Round', 'Apparatus', 'Rank', 'Score', 'FullNa
 
 print(data[(data["Round"]=="qual") & (data["Gender"] == 'w')]["Apparatus"].unique())
 
+# get the top 10 most likely candidates by taking the average median of their likely apparatus scores
+def get_candidates(data, gender, Country):
+    athlete_scores = dict()
+    data = data[(data['Gender'] == gender) & (data["Country"] == Country)]
+    athletes = data['FullName'].unique()
+    apps = data['Apparatus'].unique()
+    for athlete in athletes:
+        athlete_scores[athlete] = dict()
+        for app in apps:
+            app_data = data[(data["Apparatus"] == app) & (data["FullName"] == athlete)]
+            if app_data.empty:
+                # draw from country's distribution if no data exists
+                athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
+                country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
+                if len(country_app_data) > 0: 
+                    app_score = sample_history(country_app_data["Score"], 1000)
+            elif len(app_data) == 1:
+                app_score = app_data['Score'].iloc[0]
+            else:
+                app_score = statistics.median(app_data["Score"])
+            athlete_scores[athlete][app] = app_score
+    
+    athlete_avg_scores = dict()
+    for athlete, app in athlete_scores.items():
+        avg_score = sum(app.values())/len(app)
+        athlete_avg_scores[athlete] = avg_score
+    
+    top_ten = sorted(athlete_avg_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    return [athlete for athlete,_ in top_ten]
+
+
 # VT1 or VT2, higher one taken
-def simulate_individual(data, gender, athlete_combo):
+def simulate_individual(data, gender, candidates):
     if gender == 'w':
         apps = ['FX', 'BB', 'UB', 'VT1', 'VT2']
         data = data[data['Gender'] == 'w']
@@ -57,17 +89,18 @@ def simulate_individual(data, gender, athlete_combo):
                     athlete_country = round_data[(round_data["FullName"] == athlete)]["Country"].iloc[0]
                     country_app_data = round_data[(round_data["Country"] == athlete_country) & (round_data['Apparatus'] == app)]
                     if len(country_app_data) > 0: 
-                        athlete_app_round_score = sample_history(country_app_data["Score"])
+                        athlete_app_round_score = sample_history(country_app_data["Score"], 1000)
                     else:
                         athlete_app_round_score = 0
                 elif len(athlete_app_round_data) == 1:
                     athlete_app_round_score = athlete_app_round_data['Score'].iloc[0]
                 else:
-                    athlete_app_round_score = sample_history(athlete_app_round_data['Score'])
+                    athlete_app_round_score = sample_history(athlete_app_round_data['Score'], 1000)
                     
                 app_dict[app][round][athlete] = athlete_app_round_score
 
             if round == "qual":
+
                 app_scores = sorted(app_dict[app][round].items(), key=lambda item: item[1], reverse=True)[:8]
                 athlete_pass = [athlete for (athlete, _) in app_scores]
                 data_copy.loc[~data_copy['FullName'].isin(athlete_pass), 'Include'] = 0
@@ -84,9 +117,8 @@ def simulate_individual(data, gender, athlete_combo):
     # return count_medals(app_medals, athlete_combo)
 
 
-def sample_history(athlete_data):
+def sample_history(athlete_data, n):
     past_scores = list(athlete_data)
-    n = 1000
     samples = random.choices(past_scores, k=n)
     return statistics.mean(samples)
 
@@ -101,6 +133,8 @@ def sample_history(athlete_data):
 #     return total_medals
 
 # print(country_medals)
+
+athlete_candidates_women = get_candidates(data, 'w', 'USA')
 
 print(simulate_individual(data, 'w', None))
 
