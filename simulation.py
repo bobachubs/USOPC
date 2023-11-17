@@ -9,6 +9,19 @@ from itertools import combinations
 
 # preprocessing
 data = pd.read_csv("data_2022_2023.csv")
+# ['NOR' 'ESP' 'ITA' 'EGY' 'MAS' 'GBR' 'UZB' 'GEO' 'SRI' 'INA' 'JOR' 'ENG'
+#  'CRC' 'ISL' 'CAY' 'PAK' 'IRI' 'BAN' 'KAZ' 'BUL' 'ALG' 'POR' 'CHI' 'LAT'
+#  'BRA' 'CYP' 'FIN' 'VEN' 'PUR' 'SCO' 'TUR' 'AUT' 'CZE' 'JPN' 'IRL' 'NIR'
+#  'PAN' 'ARM' 'USA' 'RSA' 'HKG' 'ISR' 'HUN' 'AUS' 'SVK' 'WAL' 'ROU'
+#  'SUI' 'SLO' 'CRO' 'DEN' 'FRA' 'PHI' 'LTU' 'GER' 'CAN' 'COL' 'MLT' 'LUX'
+#  'BEL' 'GE1' 'AZE' 'UKR' 'NED' 'MEX' 'CUB' 'ARG' 'ESA' 'CHN' 'SGP' 'KOR'
+#  'NZL' 'DOM' 'MON' 'TPE' 'MGL' 'VIE' 'SRB' 'IOM' 'JAM' 'IND' 'BLR' 'GRE'
+#  'SWE' 'ARU' 'PER' 'POL' 'GE2' 'MAR' 'BAR' 'KGZ' 'RUS' 'JEY' 'GUA' 'THA'
+#  'SYR' 'TTO' 'ECU' 'ALB' 'QAT' 'BOL' 'CCS']
+
+# Kaylia Nemour (ALG), Pauline Schaefer-Betz (GER), Alexa Moreno (MEX), Filipa Martins (POR), Aleah Finnegan (PHI), Bettina Lili Czifra (HUN), Alba Petisco (ESP), Anna Lashchevska (UKR), Lena Bickel (SUI), Hillary Heron (PAN), Caitlin Rooskrantz (RSA), Sona Artamonova (CZE), Lihie Raz (ISR), and Lucija Hribar
+print()
+qual_countries = ['CHN', 'BRA', 'ITA', 'NED', 'FRA', 'JPN', 'AUS', 'ROU', 'KOR', 'USA', 'GBR', 'CAN']
 # print(data.head())
 
 # join first and last names

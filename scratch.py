@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 import statistics
-import itertools
+from itertools import combinations
 
 # How would your recommended team differ if you are trying to maximize total medal count, gold medals, or a weighted medal count?
 # First total
@@ -10,11 +10,16 @@ import itertools
 # preprocessing
 data = pd.read_csv("data_2022_2023.csv")
 # print(data.head())
+# '2022 51st FIG Artistic Gymnastics World Championships'
+# '2023 52nd FIG Artistic Gymnastics World Championships'
 
 # join first and last names
 
 data['LastName'] = data['LastName'].str.lower().str.capitalize()
 data['FullName'] = data['FirstName'] + ' ' + data['LastName']
+world_data = data[(data['Competition'] == '2022 51st FIG Artistic Gymnastics World Championships') | (data['Competition'] == '2023 52nd FIG Artistic Gymnastics World Championships')]
+print(world_data[world_data["Country"] == 'USA']['FullName'].unique())
+
 data = data.dropna(subset=['FullName', 'Score'])
 data = data[['Gender', 'Country', 'Round', 'Apparatus', 'Rank', 'Score', 'FullName']]
 
@@ -26,6 +31,7 @@ def sample_history(athlete_data, n):
     return statistics.mean(samples)
 
 # get the top 10 most likely candidates given a Country by taking the average median of their likely apparatus scores
+# question: 
 def get_candidates(data, gender, Country):
     athlete_scores = dict()
     data = data[(data['Gender'] == gender) & (data["Country"] == Country)]
@@ -40,7 +46,7 @@ def get_candidates(data, gender, Country):
                 athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
                 country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
                 if len(country_app_data) > 0: 
-                    app_score = sample_history(country_app_data["Score"], 1000)
+                    app_score = sample_history(country_app_data["Score"], 100)
             elif len(app_data) == 1:
                 app_score = app_data['Score'].iloc[0]
             else:
@@ -61,6 +67,7 @@ for country in data["Country"].unique():
     top_candidates_w += get_candidates(data, 'w', country)
 
 # VT1 or VT2, higher one taken
+# TODO: take 4/5
 def simulate_individual(data, gender, us_candidates):
     if gender == 'w':
         apps = ['FX', 'BB', 'UB', 'VT1', 'VT2']
@@ -109,7 +116,7 @@ def simulate_individual(data, gender, us_candidates):
                 app_dict[app][round][athlete] = athlete_app_round_score
 
             if round == "qual":
-                # sum VT1 and VT2 if individual apparatus
+                # sum VT1 and VT2 if individual apparatus for qual
                 if app == 'VT1': continue
                 if app == 'VT2':
                     app_dict['VT'] = dict()
@@ -127,6 +134,7 @@ def simulate_individual(data, gender, us_candidates):
                 # print(data_copy[data_copy["Include"] == 1]["FullName"].unique())
                 # print(app, app_scores)
             if round == "final":
+                # TODO: max 2 per country, break ties (off chance everyone ties for the same place, break by difficulty then execution)
                 if app == 'VT1': continue
                 app_scores = sorted(app_dict[app][round].items(), key=lambda item: item[1], reverse=True)[:3]
                 # athlete_pass = [athlete for (athlete, _) in app_scores]
@@ -135,15 +143,34 @@ def simulate_individual(data, gender, us_candidates):
                 app_medals[app] = app_scores_country
                 # print(app, app_scores)
     return app_medals
-    # return count_medals(app_medals, athlete_combo)
+    return count_medals(app_medals, athlete_combo)
 
 
+# how many medals? or which medals
+# def count_medals(app_medals, athlete_combo):
+#     print(app_medals)
+#     total_medals = 0
+#     merged_winners = [winner[0] for app in app_medals.values() for winner in app]
+#     for athlete in athlete_combo:
+#         total_medals += merged_winners.count(athlete)
+#     # return f"{athlete_combo}: {total_medals} medals"
+#     return total_medals
+
+# print(country_medals)
 
 athlete_candidates_women = get_candidates(data, 'w', 'USA')
 
-print(simulate_individual(data, 'w', None))
+# print(list(combinations(athlete_candidates_women, 5)))
+
+# print(simulate_individual(data, 'w', None))
+
+
+rounds = 100
+for _ in rounds:
+    continue
+    
+
 
 # print(data[data['FullName'] == 'Dildora Aripova'])
 
 # print(data[(data["Apparatus"] == "VT1") & (data["Round"]=="final")])
-
