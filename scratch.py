@@ -9,21 +9,61 @@ from itertools import combinations
 
 # preprocessing
 data = pd.read_csv("data_2022_2023.csv")
+# print(len(data))
 # print(data.head())
 # '2022 51st FIG Artistic Gymnastics World Championships'
 # '2023 52nd FIG Artistic Gymnastics World Championships'
 
 # join first and last names
 
+
 data['LastName'] = data['LastName'].str.lower().str.capitalize()
 data['FullName'] = data['FirstName'] + ' ' + data['LastName']
-world_data = data[(data['Competition'] == '2022 51st FIG Artistic Gymnastics World Championships') | (data['Competition'] == '2023 52nd FIG Artistic Gymnastics World Championships')]
-print(world_data[world_data["Country"] == 'USA']['FullName'].unique())
+data.replace("Melanie De jesus dos santos", "Melanie Jesus santos", inplace=True)
+
+(data['Competition'] == '2022 51st FIG Artistic Gymnastics World Championships')
+world_data = data[(data['Competition'] == '2023 52nd FIG Artistic Gymnastics World Championships')]
+qual_countries_w = ['CHN', 'BRA', 'ITA', 'NED', 'FRA', 'JPN', 'AUS', 'ROU', 'KOR', 'USA', 'GBR', 'CAN']
+qual_countries_m = ['USA', 'CHN', 'GBR', 'GER', 'JPN', 'BRA', 'ITA', 'CAN', 'SUI', 'ESP', 'TUR', 'NED']
+
+qual_athletes_w = []
+qual_athletes_m = []
+for c in qual_countries_w:
+    athletes = world_data[(world_data["Country"]==c) & (world_data["Gender"] == 'w')]['FullName'].unique()
+    if len(athletes) > 5: 
+        athletes_scores = world_data[(world_data["Country"]==c) & (world_data["Gender"] == 'w')]
+        athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(5).index
+        # print(athletes)
+    qual_athletes_w += list(athletes)
+
+for c in qual_countries_m:
+    athletes = world_data[(world_data["Country"]==c) & (world_data["Gender"] == 'm')]['FullName'].unique()
+    if len(athletes) > 5: 
+        athletes_scores = world_data[(world_data["Country"]==c) & (world_data["Gender"] == 'm')]
+        athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(5).index
+        # print(athletes)
+    qual_athletes_m += list(athletes)
+
+print(qual_athletes_w)
+print(qual_athletes_m)
 
 data = data.dropna(subset=['FullName', 'Score'])
 data = data[['Gender', 'Country', 'Round', 'Apparatus', 'Rank', 'Score', 'FullName']]
 
+data = data.drop_duplicates()
 # print(data[(data["Round"]=="qual") & (data["Gender"] == 'w')]["Apparatus"].unique())
+
+qual_data = data[(data["FullName"].isin(qual_athletes_w) | 
+                  data["FullName"].isin(qual_athletes_m))]
+
+# now the mutually exclusive set of data exclusing qualifying teams for simulating remaining 36 for each gender
+
+rem_data = data[((~data["FullName"].isin(qual_athletes_w)) & 
+                 (~data["FullName"].isin(qual_athletes_m)) & 
+                  (data["Country"] != 'USA'))]
+
+us_data = data[(data["Country"] == 'USA')]
+
 
 def sample_history(athlete_data, n):
     past_scores = list(athlete_data)
@@ -32,39 +72,39 @@ def sample_history(athlete_data, n):
 
 # get the top 10 most likely candidates given a Country by taking the average median of their likely apparatus scores
 # question: 
-def get_candidates(data, gender, Country):
-    athlete_scores = dict()
-    data = data[(data['Gender'] == gender) & (data["Country"] == Country)]
-    athletes = data['FullName'].unique()
-    apps = data['Apparatus'].unique()
-    for athlete in athletes:
-        athlete_scores[athlete] = dict()
-        for app in apps:
-            app_data = data[(data["Apparatus"] == app) & (data["FullName"] == athlete)]
-            if app_data.empty:
-                # draw from country's distribution if no data exists
-                athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
-                country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
-                if len(country_app_data) > 0: 
-                    app_score = sample_history(country_app_data["Score"], 100)
-            elif len(app_data) == 1:
-                app_score = app_data['Score'].iloc[0]
-            else:
-                app_score = statistics.median(app_data["Score"])
-            athlete_scores[athlete][app] = app_score
+# def get_candidates(data, gender, Country):
+#     athlete_scores = dict()
+#     data = data[(data['Gender'] == gender) & (data["Country"] == Country)]
+#     athletes = data['FullName'].unique()
+#     apps = data['Apparatus'].unique()
+#     for athlete in athletes:
+#         athlete_scores[athlete] = dict()
+#         for app in apps:
+#             app_data = data[(data["Apparatus"] == app) & (data["FullName"] == athlete)]
+#             if app_data.empty:
+#                 # draw from country's distribution if no data exists
+#                 athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
+#                 country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
+#                 if len(country_app_data) > 0: 
+#                     app_score = sample_history(country_app_data["Score"], 100)
+#             elif len(app_data) == 1:
+#                 app_score = app_data['Score'].iloc[0]
+#             else:
+#                 app_score = statistics.median(app_data["Score"])
+#             athlete_scores[athlete][app] = app_score
     
-    athlete_avg_scores = dict()
-    for athlete, app in athlete_scores.items():
-        avg_score = sum(app.values())/len(app)
-        athlete_avg_scores[athlete] = avg_score
+#     athlete_avg_scores = dict()
+#     for athlete, app in athlete_scores.items():
+#         avg_score = sum(app.values())/len(app)
+#         athlete_avg_scores[athlete] = avg_score
     
-    top_ten = sorted(athlete_avg_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+#     top_ten = sorted(athlete_avg_scores.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    return [athlete for athlete,_ in top_ten]
+#     return [athlete for athlete,_ in top_ten]
 
-top_candidates_w = []
-for country in data["Country"].unique():
-    top_candidates_w += get_candidates(data, 'w', country)
+# top_candidates_w = []
+# for country in data["Country"].unique():
+#     top_candidates_w += get_candidates(data, 'w', country)
 
 # VT1 or VT2, higher one taken
 # TODO: take 4/5
@@ -158,18 +198,11 @@ def simulate_individual(data, gender, us_candidates):
 
 # print(country_medals)
 
-athlete_candidates_women = get_candidates(data, 'w', 'USA')
+# athlete_candidates_women = get_candidates(data, 'w', 'USA')
 
 # print(list(combinations(athlete_candidates_women, 5)))
 
-# print(simulate_individual(data, 'w', None))
-
-
-rounds = 100
-for _ in rounds:
-    continue
-    
-
+print(simulate_individual(data, 'w', None))
 
 # print(data[data['FullName'] == 'Dildora Aripova'])
 
