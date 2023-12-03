@@ -96,38 +96,39 @@ def sample_history(data):
 
 #######################################################################################################################
 
+# input of app_indiv
+# {FX: {athlete1: {score: _, d_score: _, e_score: _, country:_}, athlete2: {scores}, ...}, UB {athlete1: {scores}, ...}, ...}
 # output qual_dict for individual AA
-# {athlete: {app: (score)}}
+# {athlete1: {app1: {score: _, d_score: _, e_score: _}, app2: {scores}, ..}, athlete2: {...}}
 def make_indiv_AA_dict(app_indiv, teams_data, athletes_36):
     app_indiv['VT'] = app_indiv['VT1']
-    del app_indiv['VT1']
     teams_unique = teams_data['FullName'].unique()
-    athletes = np.concat([teams_unique, athletes_36])
+    athletes = np.concatenate([teams_unique, athletes_36])
     AA_dict = dict()
     for athlete in athletes:
         athlete_dict = dict()
         for app in app_indiv:
-            data = app_indiv[app][athlete]
-            athlete_dict[app] = data
-            AA_dict[athlete] = athlete_dict
+            if not app == 'VT1':
+                data = app_indiv[app][athlete]
+                athlete_dict[app] = data
+                AA_dict[athlete] = athlete_dict
     return AA_dict
 
 
-# trying team AA
+# output for team AA
 # {country: {athlete: {app: (score)}}}
 def make_team_AA_dict(app_indiv, teams_data):
     app_indiv['VT'] = app_indiv['VT1']
-    del app_indiv['VT1']
     team_AA = dict()
     for country in teams_data["Country"].unique():
         team_AA[country] = dict()
         for athlete in teams_data["FullName"].unique():
             team_AA[country][athlete] = dict()
             for app in app_indiv:
-                score = app_indiv[app][athlete]
-                team_AA[c][athlete][app] = score
+                if not app == 'VT1':
+                    score = app_indiv[app][athlete]
+                    team_AA[country][athlete][app] = score
     return team_AA
-
 
 
 #######################################################################################################################
@@ -164,25 +165,30 @@ def sim_qual(curr_combo, us_data, country_data, rem_data, gender):
     teams_data = pd.concat([country_data, us_team])
     app_dict = dict()
     app_indiv = dict()
-    athletes_VT1 = None
-    athletes_36 = None
+    athletes_VT1 = []
+    athletes_36 = []
+
+    # 36 random individuals
+    athletes_36 = np.random.permutation(rem_data["FullName"].unique())[:36]
+    
     for app in apps:
         app_dict[app] = dict()
         # loop through all the unique athletes
         for athlete in teams_data["FullName"].unique():
-            app_dict[app][athlete] = get_score(teams_data, athlete, app)
+            if app == 'VT1' or app == 'VT2':
+                app_dict[app][athlete] = get_score(teams_data, athlete, 'VT')
+            else:
+                app_dict[app][athlete] = get_score(teams_data, athlete, app)
 
-        # 36 random individuals
-        athletes_36 = np.random.shuffle(rem_data["FullName"].unique())[:36]
         for i in range(36):
             athlete = athletes_36[i]
             if app == 'VT1':
                 athletes_VT1.append(athlete)
-            if app == 'VT2':
-                app_dict[app][athletes_VT1[i]] = get_score(rem_data, athletes_VT1[i], app)
+                app_dict[app][athlete] = get_score(rem_data, athlete, 'VT')
+            elif app == 'VT2':
+                app_dict[app][athletes_VT1[i]] = get_score(rem_data, athletes_VT1[i], 'VT')
             else:
                 app_dict[app][athlete] = get_score(rem_data, athlete, app)
-        if app == 'VT1': continue
         if app == 'VT2':
             app_dict['VT'] = dict()
             for athlete in app_dict['VT2']:
@@ -192,16 +198,14 @@ def sim_qual(curr_combo, us_data, country_data, rem_data, gender):
             del app_dict['VT2']
             app = 'VT'
         app_scores_dict = dict()
-        for athlete, scores in app_dict:
+        for athlete, scores in app_dict[app].items():
             app_scores_dict[athlete] = {"Score": scores[0],
                                         "D_Score": scores[1],
                                         "E_Score": scores[2],
                                         "Country": scores[3]}
         app_indiv[app] = app_scores_dict
-
     indiv_AA = make_indiv_AA_dict(app_indiv, teams_data, athletes_36)
     team_AA = make_team_AA_dict(app_indiv, teams_data)
-
     del app_indiv['VT1']
 
     return app_indiv, indiv_AA, team_AA
@@ -210,30 +214,28 @@ def sim_qual(curr_combo, us_data, country_data, rem_data, gender):
 
 # given indiv_app scores, return back the n athletes who advanced, max 2/country
 def advance_indiv_app(indiv_app_scores, n):
-    # {FX: {athlete1: (scores), athlete2: (scores), ...}, UB {athlete1: (scores), ...}, ...}
+    # {FX: {athlete1: {score: _, d_score: _, e_score: _, country:_}, athlete2: {scores}, ...}, UB {athlete1: {scores}, ...}, ...}
     country_counts = dict()
     app_quals = dict()
     for app in indiv_app_scores:
-        app_scores = sorted(indiv_app_scores[app].items(), key=lambda item: (item[1][0]), reverse=True)
+        app_scores = sorted(indiv_app_scores[app].items(), key=lambda item: (item[1]["Score"]), reverse=True)
         selected_scores = dict()
         for athlete, scores in app_scores:
-            country = scores[3]
+            country = scores["Country"]
             if len(selected_scores) < n:
                 country_counts[country] = country_counts.get(country, 0) + 1
                 if country_counts[country] < 3:
-                    selected_scores = selected_scores.append(athlete)
+                    selected_scores[athlete] = scores
         app_quals[app] = selected_scores
     
     final_athletes = []
-
     for app in app_quals:
         for athlete in app_quals[app]:
             final_athletes.append(athlete)
-
-    return app_quals, athletes
+    return app_quals, final_athletes
 
 def advance_indiv_AA(indiv_AA_scores, n):
-    # {athlete1: {FX: (scores), UB: (scores), ...}, athlete2: {FX: (scores), UB: scores), ...}, ...}
+    # {athlete1: {FX: {score:_, d_score: _, e_score:_, country_}, UB: {scores}, ...}, athlete2: {FX: {scores}, UB: {scores}, ...}, ...}
     country_counts = dict()
     
     # sum scores across apparatus for each athlete
@@ -252,31 +254,31 @@ def advance_indiv_AA(indiv_AA_scores, n):
 
         athlete_scores_sum[athlete] = total_scores
 
-    # {athlete1: (scores_sum, d_sum, e_sum, Country), athlete2.....}
-    sorted_athletes = sorted(athlete_scores_sum.items(), key=lambda item: item[1][0], reverse=True)
-    
+    #input {athlete1: {scores_sum: _, d_sum: _, e_sum: _, Country: _}, athlete2.....}
+    #sorted into [(athlete1, score_dict), (athlete2, score_dict)]
+    sorted_athletes = sorted(athlete_scores_sum.items(), key=lambda item: item[1]["Score"], reverse=True)
     country_counts = dict()
     athlete_advance = dict()
     final_athletes = []
-    for athlete in sorted_athletes:
-        country = sorted_athletes[athlete][3]
+    for athlete, score in sorted_athletes:
+        country = score["Country"]
         if len(athlete_advance) < n:
-            country_counts = country_counts.get(country, 0) + 1
+            country_counts[country] = country_counts.get(country, 0) + 1
             if country_counts[country] < 3:
-                athlete_advance[athlete] = sorted_athletes[athlete]
+                athlete_advance[athlete] = score
                 final_athletes.append(athlete)
 
     return athlete_advance, final_athletes
 
 def advance_team_AA(team_AA_scores, n):
     # {country1: {athlete1: {app1: (scores), app2: (scores), ...}, athlete2: {app1: (scores), app2: (scores), ...}}, country2:, ...}
-                                  
+    # FIX THIS AND CHOOSE TOP THREE PER APP AND THEN SUM (AKA sort by scores before summing top 3). Currently it is reversed
     country_scores_sum = dict()
     for country, athletes in team_AA_scores.items():
         country_total = {'Score': 0,
                         'E_Score': 0,
                         'D_Score': 0,
-                        'Country': country}        
+                        'Country': country}       
         for athlete, app in athletes.items():
             for app, app_scores in app.items():
                 country_total['Score'] += app_scores['Score']
@@ -287,7 +289,7 @@ def advance_team_AA(team_AA_scores, n):
     # {country1: (scores_sum, d_sum, e_sum, country1), country2: (scores_sum, d_sum, e_sum, country2)}
     sorted_teams = sorted(country_scores_sum.items(), key=lambda item: item[1][0], reverse=True)[:n]
     # return top n countries/teams
-    teams_advance = [country for country in sorted_teams]
+    teams_advance = [country for country,_ in sorted_teams]
 
     return teams_advance
 #######################################################################################################################
@@ -315,9 +317,10 @@ def sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_d
         app_dict[app] = dict()
         # loop through all the unique athletes
         for athlete in finals_data["FullName"].unique():
-            app_dict[app][athlete] = get_score(data_all, athlete, app)
-            
-        if app == 'VT1': continue
+            if app == 'VT1' or app == 'VT2':
+                app_dict[app][athlete] = get_score(data_all, athlete, 'VT')
+            else:
+                app_dict[app][athlete] = get_score(data_all, athlete, app)
         if app == 'VT2':
             app_dict['VT'] = dict()
             for athlete in app_dict['VT2']:
@@ -327,14 +330,13 @@ def sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_d
             del app_dict['VT2']
             app = 'VT'
         app_scores_dict = dict()
-        for athlete, scores in app_dict:
+        for athlete, scores in app_dict[app].items():
             app_scores_dict[athlete] = {"Score": scores[0],
                                         "D_Score": scores[1],
                                         "E_Score": scores[2],
                                         "Country": scores[3]}
         indiv_app_final[app] = app_scores_dict
 
-    
     winning_dict, _ = advance_indiv_app(indiv_app_final, 3)
 
     return winning_dict
@@ -402,13 +404,12 @@ def sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data,
                                                     "Country": country}
                 
     # final countries
+    # output [(country1, (scores)), (country2, (Scores)), ...]
     final_countries = advance_team_AA(team_AA_qual, 3)
+
 
     return final_countries
 
-#######################################################################################################################
-
-us_team = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones", "Joscelyn Roberson"]
 
 #######################################################################################################################
 # Wrappers
@@ -418,18 +419,29 @@ def count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo):
 
 
 def sim_all(curr_combo, us_data, country_data, rem_data, gender):
+    us_data = us_data[us_data["Gender"] == gender]
+    country_data = country_data[country_data['Gender'] == gender]
+    rem_data = rem_data[rem_data["Gender"] == gender]
     #curr_medals = 0
     #for i in range 10000:
     # store qualifying round data
     indiv_app_qual, indiv_AA_qual, team_AA_qual = sim_qual(curr_combo, us_data, country_data, rem_data, gender)
     # simulate finals and count medals won by team USA players in each event
     res_indiv_app = sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_data, gender)
+    print("###############################################################")
+    print("Individual App Results")
+    print(res_indiv_app)
     res_indiv_AA = sim_indiv_AA_final(curr_combo, indiv_AA_qual, us_data, country_data, rem_data, gender)
+    print("###############################################################")
+    print("Individual AA Results")
+    print(res_indiv_AA)
     res_team_AA = sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data, gender)
-    curr_medals += count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo)
+    print("###############################################################")
+    print("Team AA Results")
+    print(res_team_AA)
+    # curr_medals += count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo)
     #curr_medals /= 10000 # average medals for curr combo
-    return curr_medals
-
+    # return curr_medals
 
 def sim_wrapper(gender):
     unique_athletes = us_data['FullName'].unique()
@@ -452,11 +464,17 @@ def greatest_wrapper_of_all():
     print(f"Men's Medals: {m_results[1][1]}")
     return
 
-greatest_wrapper_of_all()
+# greatest_wrapper_of_all()
 
 #######################################################################################################################
 # sim_indiv_app((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_indiv_AA((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_team_AA((qual_country_data, rem_data, us_data), 'w', us_team)
+
+us_team = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones"]
+
+#######################################################################################################################
+
+sim_all(us_team, us_data, qual_country_data, rem_data, 'w')
 
 
