@@ -2,10 +2,12 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 import matplotlib.pyplot as plt
+import math
 
 # Preprocessing
 ################################################################################################
 
+# load in the data and create full name column
 raw_data = pd.read_csv("data_2022_2023.csv")
 
 data = raw_data
@@ -17,14 +19,16 @@ data['FullName'] = data['FirstName'] + ' ' + data['LastName']
 data.replace("Melanie De jesus dos santos", "Melanie Jesus santos", inplace=True)
 
 data['Country'].replace("ENG", "GBR", inplace=True) #both GBR and ENG should be GBR
+data['Country'].replace("GE1", "GER", inplace=True) #both GE1 and GER should be GER
 
 data['Apparatus'].replace("hb", "HB", inplace=True) #hb should be HB for consistency
 
-data['Apparatus'].replace("VT1", "VT", inplace=True) #VT1 and VT2 now VT
-data['Apparatus'].replace("VT2", "VT", inplace=True) #VT1 and VT2 now VT
+# combining VT1 and VT2 into VT
+data['Apparatus'].replace("VT1", "VT", inplace=True)
+data['Apparatus'].replace("VT2", "VT", inplace=True)
 
 
-# qualifying countries from the 51st and 52nd FIG World Champs, exclusing USA
+# qualifying countries from the 51st and 52nd FIG World Champs, excluding USA
 world_data_2023 = data[(data['Competition'] == '2023 52nd FIG Artistic Gymnastics World Championships')]
 qual_countries_w = ['CHN', 'BRA', 'ITA', 'NED', 'FRA', 'JPN', 'AUS', 'ROU', 'KOR', 'GBR', 'CAN']
 qual_countries_m = ['CHN', 'GBR', 'GER', 'JPN', 'BRA', 'ITA', 'CAN', 'SUI', 'ESP', 'TUR', 'NED']
@@ -32,18 +36,19 @@ qual_countries_m = ['CHN', 'GBR', 'GER', 'JPN', 'BRA', 'ITA', 'CAN', 'SUI', 'ESP
 qual_athletes_w = []
 qual_athletes_m = []
 
-# getting teams of 5 for the other 11 countries
+# getting teams of 5 for the other 11 qualifying countries listed above
 # looping through every country that qualified for women's comp and taking the top 4/5
 for c in qual_countries_w:
   # unique athletes from country
     athletes = world_data_2023[(world_data_2023["Country"]==c) & (world_data_2023["Gender"] == 'w')]['FullName'].unique()
     if len(athletes) > 4:
-      # filtering for athletes from the country that won --> all scores
+      # filtering for top 4 athletes from the country that won --> all scores
       # getting mean and taking top 4
         athletes_scores = world_data_2023[(world_data_2023["Country"]==c) & (world_data_2023["Gender"] == 'w')]
         athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(4).index
     qual_athletes_w += list(athletes)
 
+# same as above but for mens
 for c in qual_countries_m:
     athletes = world_data_2023[(world_data_2023["Country"]==c) & (world_data_2023["Gender"] == 'm')]['FullName'].unique()
     if len(athletes) > 4:
@@ -68,20 +73,21 @@ rem_data = data[((~data["Country"].isin(qual_countries_w)) &
 # USA athletes
 us_data = data[(data["Country"] == 'USA')]
 
-data = data.dropna(subset=['FullName', 'Score'])
-data = data[['Gender', 'Country', 'Round', 'Apparatus', 'D_Score', 'E_Score', 'Score', 'FullName']]
-data = data.drop_duplicates()
+# removing NA rows and selecting specific columns and removing duplicated rows
+# data = data.dropna(subset=['FullName', 'Score'])
+# data = data[['Gender', 'Country', 'Round', 'Apparatus', 'D_Score', 'E_Score', 'Score', 'FullName']]
+# data = data.drop_duplicates()
 
-qual_country_data = data[(data["FullName"].isin(qual_athletes_w) |
-                data["FullName"].isin(qual_athletes_m))]
+# qual_country_data = data[(data["FullName"].isin(qual_athletes_w) |
+#                 data["FullName"].isin(qual_athletes_m))]
 
-# now the mutually exclusive set of data excluding qualifying teams for simulating remaining 36 for each gender
+# # now the mutually exclusive set of data excluding qualifying teams for simulating remaining 36 for each gender
 
-rem_data = data[((~data["Country"].isin(qual_countries_w)) &
-                (~data["Country"].isin(qual_countries_m)) &
-                (data["Country"] != 'USA'))]
+# rem_data = data[((~data["Country"].isin(qual_countries_w)) &
+#                 (~data["Country"].isin(qual_countries_m)) &
+#                 (data["Country"] != 'USA'))]
 
-us_data = data[(data["Country"] == 'USA')]
+# us_data = data[(data["Country"] == 'USA')]
 
 #######################################################################################################################
 
@@ -93,6 +99,24 @@ def sample_history(data):
     e_score = row['E_Score'].iloc[0]
     country = row["Country"].iloc[0]
     return (score, d_score, e_score, country)
+
+#######################################################################################################################
+
+def get_score(data, athlete, app):
+    athlete_app_data = data[(data['FullName'] == athlete) & (data['Apparatus'] == app)]
+    # NOTE: athlete_app_round_scores: app_score, d_score, e_score
+    if athlete_app_data.empty:
+        # draw from country's distribution if no data exists
+        athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
+        country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
+        if len(country_app_data) > 0:
+            athlete_app_round_scores = sample_history(country_app_data)
+        else:
+            #athlete_app_round_scores = (0, 0, 0, "None")
+            athlete_app_round_scores = (0, 0, 0, athlete_country)
+    else:
+        athlete_app_round_scores = sample_history(athlete_app_data)
+    return athlete_app_round_scores
 
 #######################################################################################################################
 
@@ -122,71 +146,66 @@ def make_team_AA_dict(app_indiv, teams_data):
     team_AA = dict()
     for country in teams_data["Country"].unique():
         team_AA[country] = dict()
-        for athlete in teams_data["FullName"].unique():
+        country_athletes = teams_data[(teams_data['Country'] == country)]
+        for athlete in country_athletes["FullName"].unique():
             team_AA[country][athlete] = dict()
             for app in app_indiv:
                 if not app == 'VT1':
                     score = app_indiv[app][athlete]
                     team_AA[country][athlete][app] = score
+    #print("team", team_AA['GBR'].keys())
     return team_AA
-
-
-#######################################################################################################################
-
-def get_score(data, athlete, app):
-    athlete_app_data = data[(data['FullName'] == athlete) & (data['Apparatus'] == app)]
-    # NOTE: athlete_app_round_scores: app_score, d_score, e_score
-    if athlete_app_data.empty:
-        # draw from country's distribution if no data exists
-        athlete_country = data[(data["FullName"] == athlete)]["Country"].iloc[0]
-        country_app_data = data[(data["Country"] == athlete_country) & (data['Apparatus'] == app)]
-        if len(country_app_data) > 0:
-            athlete_app_round_scores = sample_history(country_app_data)
-        else:
-            athlete_app_round_scores = (0, 0, 0, "None")
-    else:
-        athlete_app_round_scores = sample_history(athlete_app_data)
-    return athlete_app_round_scores
 
 #######################################################################################################################
 
 def sim_qual(curr_combo, us_data, country_data, rem_data, gender):
-    #VT1 counts for individual_AA and team_AA
+    # VT1 counts for individual_AA and team_AA
     # VT1 and VT2 count for indiv_App, averaged
     # pg 43/171
     # https://www.gymnastics.sport/publicdir/rules/files/en_2022-2024%20WAG%20COP.pdf
 
+    # determine relevant apparatuses
     if gender == 'w':
         apps = ['FX', 'BB', 'UB', 'VT1', 'VT2']
     else:
         apps = ['FX', 'PH', 'PB', 'HB', 'SR', 'VT1', 'VT2']
 
+    # get data on current USA team for sampling
     us_team = us_data[us_data["FullName"].isin(curr_combo)]
+    # combine into big data frame
     teams_data = pd.concat([country_data, us_team])
-    app_dict = dict()
-    app_indiv = dict()
-    athletes_VT1 = []
+    data_all = pd.concat([country_data, us_data, rem_data])
+    app_dict = dict() # dictionary to track results for each app
+    app_indiv = dict() # track each athlete's performance
+    # athletes_VT1 = []
     athletes_36 = []
 
     # 36 random individuals
+    rem_data = rem_data[(rem_data["Gender"] == gender)]
     athletes_36 = np.random.permutation(rem_data["FullName"].unique())[:36]
-    
+
+    # sampling for qualifying teams
     for app in apps:
         app_dict[app] = dict()
         # loop through all the unique athletes
         for athlete in teams_data["FullName"].unique():
+          # sample from merged VT
             if app == 'VT1' or app == 'VT2':
-                app_dict[app][athlete] = get_score(teams_data, athlete, 'VT')
+                app_dict[app][athlete] = get_score(data_all, athlete, 'VT')
             else:
-                app_dict[app][athlete] = get_score(teams_data, athlete, app)
+                app_dict[app][athlete] = get_score(data_all, athlete, app)
 
+  # sampling for 36 individuals
         for i in range(36):
             athlete = athletes_36[i]
-            if app == 'VT1':
-                athletes_VT1.append(athlete)
+            # if app == 'VT1':
+            #     athletes_VT1.append(athlete)
+            #     app_dict[app][athlete] = get_score(rem_data, athlete, 'VT')
+            # elif app == 'VT2':
+            #     app_dict[app][athletes_VT1[i]] = get_score(rem_data, athletes_VT1[i], 'VT')
+            if app == 'VT1' or app == 'VT2':
                 app_dict[app][athlete] = get_score(rem_data, athlete, 'VT')
-            elif app == 'VT2':
-                app_dict[app][athletes_VT1[i]] = get_score(rem_data, athletes_VT1[i], 'VT')
+                app_dict[app][athlete] = get_score(rem_data, athlete, 'VT')
             else:
                 app_dict[app][athlete] = get_score(rem_data, athlete, app)
         if app == 'VT2':
@@ -211,14 +230,17 @@ def sim_qual(curr_combo, us_data, country_data, rem_data, gender):
     return app_indiv, indiv_AA, team_AA
 
 #######################################################################################################################
-
-# given indiv_app scores, return back the n athletes who advanced, max 2/country
+# Advancing
+# given indiv_app scores, return back the 8 athletes who advanced, max 2/country
+# for each app
 def advance_indiv_app(indiv_app_scores, n):
     # {FX: {athlete1: {score: _, d_score: _, e_score: _, country:_}, athlete2: {scores}, ...}, UB {athlete1: {scores}, ...}, ...}
-    country_counts = dict()
     app_quals = dict()
     for app in indiv_app_scores:
+        country_counts = dict()
+      # for the app, sort the scores in decreasing order
         app_scores = sorted(indiv_app_scores[app].items(), key=lambda item: (item[1]["Score"]), reverse=True)
+        # print(app, app_scores)
         selected_scores = dict()
         for athlete, scores in app_scores:
             country = scores["Country"]
@@ -227,30 +249,35 @@ def advance_indiv_app(indiv_app_scores, n):
                 if country_counts[country] < 3:
                     selected_scores[athlete] = scores
         app_quals[app] = selected_scores
-    
-    final_athletes = []
+
+# returning dictionary where each app key stores a list of the athletes
+# who qualified for that app's finals
+# {FX: [ath1, ath2, ... , ath8], ... , BB: [...]}
+    #final_athletes = []
+    final_athletes = dict()
     for app in app_quals:
+        final_athletes[app] = []
         for athlete in app_quals[app]:
-            final_athletes.append(athlete)
-    return app_quals, final_athletes
+            final_athletes[app].append(athlete)
+    #return app_quals, final_athletes
+    #print("final athletes", final_athletes)
+    return final_athletes
 
 def advance_indiv_AA(indiv_AA_scores, n):
     # {athlete1: {FX: {score:_, d_score: _, e_score:_, country_}, UB: {scores}, ...}, athlete2: {FX: {scores}, UB: {scores}, ...}, ...}
     country_counts = dict()
-    
+
     # sum scores across apparatus for each athlete
     athlete_scores_sum = dict()
     for athlete, scores in indiv_AA_scores.items():
         total_scores = {'Score': 0,
-                        'E_Score': 0,
                         'D_Score': 0,
+                        'E_Score': 0,
                         'Country': indiv_AA_scores[athlete]['FX']['Country']}
         for _, app_scores in scores.items():
-            # sort by top 3
-            # FIX THIS AND DO TOP 3/4 Scores
             total_scores['Score'] += app_scores['Score']
-            total_scores['E_Score'] += app_scores['E_Score']
             total_scores['D_Score'] += app_scores['D_Score']
+            total_scores['E_Score'] += app_scores['E_Score']
 
         athlete_scores_sum[athlete] = total_scores
 
@@ -258,40 +285,83 @@ def advance_indiv_AA(indiv_AA_scores, n):
     #sorted into [(athlete1, score_dict), (athlete2, score_dict)]
     sorted_athletes = sorted(athlete_scores_sum.items(), key=lambda item: item[1]["Score"], reverse=True)
     country_counts = dict()
-    athlete_advance = dict()
+    #athlete_advance = dict()
     final_athletes = []
     for athlete, score in sorted_athletes:
         country = score["Country"]
-        if len(athlete_advance) < n:
+        #if len(athlete_advance) < n:
+        if len(final_athletes) < n:
             country_counts[country] = country_counts.get(country, 0) + 1
             if country_counts[country] < 3:
-                athlete_advance[athlete] = score
+                #athlete_advance[athlete] = score
                 final_athletes.append(athlete)
+    # print("final athletes", final_athletes)
+    return final_athletes
 
-    return athlete_advance, final_athletes
+# def advance_team_AA(team_AA_scores, n):
+#     # {country1: {athlete1: {app1: (scores), app2: (scores), ...}, athlete2: {app1: (scores), app2: (scores), ...}}, country2:, ...}
+#     country_scores_sum = dict()
+#     for country, athletes in team_AA_scores.items():
+#         # sorted_athletes = sorted(athletes.items(), key=lambda item: item[1][0], reverse=True)[:n]
+#         country_total = {'Score': 0,
+#                         'D_Score': 0,
+#                         'E_Score': 0,
+#                         'Country': country}
+#         for athlete, app in athletes.items():
+#             for app, app_scores in app.items():
+#                 country_total['Score'] += app_scores['Score']
+#                 country_total['D_Score'] += app_scores['D_Score']
+#                 country_total['E_Score'] += app_scores['E_Score']
+#         country_scores_sum[country] = country_total
 
+#     # {country1: (scores_sum, d_sum, e_sum, country1), country2: (scores_sum, d_sum, e_sum, country2)}
+#     # sorted_teams = sorted(country_scores_sum.items(), key=lambda item: item[1][0], reverse=True)[:n]
+#     # return top n countries/teams
+#     teams_advance = [country for country in country_scores_sum]
+
+#     return teams_advance
+
+
+# find which 8 countries go to finals
 def advance_team_AA(team_AA_scores, n):
     # {country1: {athlete1: {app1: (scores), app2: (scores), ...}, athlete2: {app1: (scores), app2: (scores), ...}}, country2:, ...}
-    # FIX THIS AND CHOOSE TOP THREE PER APP AND THEN SUM (AKA sort by scores before summing top 3). Currently it is reversed
-    country_scores_sum = dict()
-    for country, athletes in team_AA_scores.items():
-        country_total = {'Score': 0,
-                        'E_Score': 0,
+    countries_scores = dict() # scoring team AA score for all countries
+    # for each country sum the individual scores to get the 4 AA scores
+    all_countries_totals = dict() # all the top 3 athletes from each team
+    for country in team_AA_scores:
+        countries_scores[country] = 0 # keeps track of countries team AA
+        country_total = dict() # AA scores for country's team
+        country_info = team_AA_scores[country] # dict athletes and their indiv app scores
+        # summing scores for all apps for one athlete
+        for athlete, app in country_info.items():
+            athlete_total = {'Score': 0,
                         'D_Score': 0,
-                        'Country': country}       
-        for athlete, app in athletes.items():
+                        'E_Score': 0,
+                        'Country': country}
             for app, app_scores in app.items():
-                country_total['Score'] += app_scores['Score']
-                country_total['E_Score'] += app_scores['E_Score']
-                country_total['D_Score'] += app_scores['D_Score']
-        country_scores_sum[country] = (country_total['Score'], country_total['E_Score'], country_total['D_Score'], country_total['Country'])
+                athlete_total['Score'] += app_scores['Score']
+                athlete_total['D_Score'] += app_scores['D_Score']
+                athlete_total['E_Score'] += app_scores['E_Score']
+            # store total AA scores of each athlete and sort to get the top 3
+            country_total[athlete] = athlete_total['Score']
+        country_total = dict(sorted(country_total.items(),
+                               key=lambda item: item[1], reverse = True)[:3])
+        all_countries_totals[country] = country_total # store top 3 athletes
+        # if country == 'GBR': print("totals", country_total)
+        countries_scores[country] = sum(country_total.values()) # find team AA score
+    #print("scores", countries_scores)
+    # select the 8 teams with the highest team AA scores
+    countries_scores = dict(sorted(countries_scores.items(),
+                               key=lambda item: item[1], reverse = True)[:n])
+    advance_team_AA = dict() # for the teams that advance, get the top 3 athletes
+    for country in countries_scores:
+        #print("all total", all_countries_totals)
+        advance_team_AA[country] = list(all_countries_totals[country])
+    #{Country 1: [ath1, ath2, ath3], ... , Country 8: [...]}
+    #print("advanced", advance_team_AA)
+    return advance_team_AA
 
-    # {country1: (scores_sum, d_sum, e_sum, country1), country2: (scores_sum, d_sum, e_sum, country2)}
-    sorted_teams = sorted(country_scores_sum.items(), key=lambda item: item[1][0], reverse=True)[:n]
-    # return top n countries/teams
-    teams_advance = [country for country,_ in sorted_teams]
 
-    return teams_advance
 #######################################################################################################################
 # Finals
 
@@ -303,20 +373,27 @@ def sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_d
         apps = ['FX', 'PH', 'PB', 'HB', 'SR', 'VT1', 'VT2']
 
     # get top 8 from qualifications first
-    _, final_athletes = advance_indiv_app(indiv_app_qual, 8)
+    final_athletes = advance_indiv_app(indiv_app_qual, 8)
+
+    #{FX: [ath1, ath2, ..., ath8], ... VT: [...]}
 
     # repeat simulation for the finalists
     us_team = us_data[us_data["FullName"].isin(curr_combo)]
     data_all = pd.concat([country_data, us_team, rem_data])
-    finals_data = data_all[data_all["FullName"].isin(final_athletes)]
+    # finals_data = data_all[data_all["FullName"].isin(final_athletes)]
 
     app_dict = dict()
     indiv_app_final = dict()
-    
+
     for app in apps:
         app_dict[app] = dict()
         # loop through all the unique athletes
-        for athlete in finals_data["FullName"].unique():
+        if app == 'VT1' or app == 'VT2':
+          athletes = final_athletes['VT']
+        else:
+          athletes = final_athletes[app]
+        #for athlete in finals_data["FullName"].unique():
+        for athlete in athletes:
             if app == 'VT1' or app == 'VT2':
                 app_dict[app][athlete] = get_score(data_all, athlete, 'VT')
             else:
@@ -326,7 +403,7 @@ def sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_d
             for athlete in app_dict['VT2']:
                 vt1_score, d1_score, e1_score, country = app_dict['VT1'][athlete]
                 vt2_score, d2_score, e2_score, country = app_dict['VT2'][athlete]
-                app_dict['VT'][athlete] = (np.mean((vt1_score,vt2_score)), np.mean((d1_score,d2_score)), np.mean((e1_score,e2_score)), country)
+                app_dict['VT'][athlete] = (np.mean((vt1_score, vt2_score)), np.mean((d1_score,d2_score)), np.mean((e1_score,e2_score)), country)
             del app_dict['VT2']
             app = 'VT'
         app_scores_dict = dict()
@@ -337,7 +414,9 @@ def sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_d
                                         "Country": scores[3]}
         indiv_app_final[app] = app_scores_dict
 
-    winning_dict, _ = advance_indiv_app(indiv_app_final, 3)
+    winning_dict = advance_indiv_app(indiv_app_final, 3)
+
+    del winning_dict['VT1']
 
     return winning_dict
 
@@ -347,62 +426,64 @@ def sim_indiv_AA_final(curr_combo, indiv_AA_qual, us_data, country_data, rem_dat
         apps = ['FX', 'BB', 'UB', 'VT']
     else:
         apps = ['FX', 'PH', 'PB', 'HB', 'SR', 'VT']
-    
+
     # get top 24 from qualifications first
-    _, final_athletes = advance_indiv_AA(indiv_AA_qual, 24)   
+    final_athletes = advance_indiv_AA(indiv_AA_qual, 24)
 
     # simulate these individuals again
     us_team = us_data[us_data["FullName"].isin(curr_combo)]
     data_all = pd.concat([country_data, us_team, rem_data])
-    finals_data = data_all[data_all["FullName"].isin(final_athletes)]
+    # finals_data = data_all[data_all["FullName"].isin(final_athletes)]
 
     athlete_dict = dict()
 
-    for athlete in finals_data["FullName"].unique():
+    for athlete in final_athletes:
         athlete_dict[athlete] = dict()
         for app in apps:
             score, e_score, d_score, country = get_score(data_all, athlete, app)
             athlete_dict[athlete][app] = {'Score': score,
-                                            "E_Score": e_score,
-                                            "D_Score": d_score,
-                                            "Country": country}    
-    
-    winning_dict, _ = advance_indiv_AA(athlete_dict, 8)
-    
-    return winning_dict
+                                            "D_Score": e_score,
+                                            "E_Score": d_score,
+                                            "Country": country}
+
+    winners_list = advance_indiv_AA(athlete_dict, 3)
+
+    return winners_list
 
 def sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data, gender):
     # outputs a list of countries
 
     if gender == 'w':
-        apps = ['FX', 'BB', 'UB', 'VT']
+        apps = ['FX', 'BB', 'UB', 'VT1']
     else:
-        apps = ['FX', 'PH', 'PB', 'HB', 'SR', 'VT']
+        apps = ['FX', 'PH', 'PB', 'HB', 'SR', 'VT1']
 
-    # list of top 8 countries
+    # {Country 1: [ath1, ath2, ath3], ... Country 8: [...]}
     final_teams = advance_team_AA(team_AA_qual, 8)
 
     # simulate these individuals for the advancing countries again
     us_team = us_data[us_data["FullName"].isin(curr_combo)]
     data_all = pd.concat([country_data, us_team, rem_data])
-    finals_data = data_all[data_all["Country"].isin(final_teams)]
+    # finals_data = data_all[data_all["Country"].isin(final_teams)]
 
     team_dict = dict()
 
-    for country in finals_data["Country"].unique():
+    for country in final_teams:
         team_dict[country] = dict()
-        team_data = finals_data[finals_data["Country"] == country]
-        for athlete in team_data["FullName"].unique():
+        for athlete in final_teams[country]:
             team_dict[country][athlete] = dict()
             for app in apps:
-                score, e_score, d_score, country = get_score(data_all, athlete, app)
+              if app == 'VT1':
+                  scores = get_score(data_all, athlete, 'VT')
+              else:
+                  scores = get_score(data_all, athlete, app)
                 # print(country, athlete, app)
                 # print(get_score(finals_data, athlete, app)  )
-                team_dict[country][athlete][app] = {'Score': score,
-                                                    "E_Score": e_score,
-                                                    "D_Score": d_score,
-                                                    "Country": country}
-                
+              team_dict[country][athlete][app] = {'Score': scores[0],
+                                                  "D_Score": scores[1],
+                                                  "E_Score": scores[2],
+                                                  "Country": scores[3]}
+
     # final countries
     # output [(country1, (scores)), (country2, (Scores)), ...]
     final_countries = advance_team_AA(team_AA_qual, 3)
@@ -413,68 +494,117 @@ def sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data,
 
 #######################################################################################################################
 # Wrappers
+# Individual App Results
+# {'FX': ['Simone Biles', 'Rebeca Andrade', 'Jessica Gadirova'], }
+# #################
+# Individual AA Results
+# ['Simone Biles', 'Rebeca Andrade', 'Melanie Jesus santos']
+# #################
+# Team AA Results
+# {'USA': ['Simone Biles', 'Skye Blakely', 'Jordan Chiles'],
 def count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo):
-    # 
-    return
+    medal_count = 0
+
+    for app in res_indiv_app:
+        athletes = res_indiv_app[app]
+        for athlete in curr_combo:
+            if athlete in athletes:
+                medal_count += 1
+    for athlete in res_indiv_AA:
+        if athlete in curr_combo:
+            medal_count += 1
+
+    if 'USA' in res_team_AA:
+        # get counts of 'USA' that appear in results vs doesn't, plot binary barplot
+        medal_count += 1
+
+    return medal_count
 
 
 def sim_all(curr_combo, us_data, country_data, rem_data, gender):
     us_data = us_data[us_data["Gender"] == gender]
     country_data = country_data[country_data['Gender'] == gender]
     rem_data = rem_data[rem_data["Gender"] == gender]
-    #curr_medals = 0
-    #for i in range 10000:
+    curr_medals = 0
+    for i in range(10):
     # store qualifying round data
-    indiv_app_qual, indiv_AA_qual, team_AA_qual = sim_qual(curr_combo, us_data, country_data, rem_data, gender)
-    # simulate finals and count medals won by team USA players in each event
-    res_indiv_app = sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_data, gender)
-    print("###############################################################")
-    print("Individual App Results")
-    print(res_indiv_app)
-    res_indiv_AA = sim_indiv_AA_final(curr_combo, indiv_AA_qual, us_data, country_data, rem_data, gender)
-    print("###############################################################")
-    print("Individual AA Results")
-    print(res_indiv_AA)
-    res_team_AA = sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data, gender)
-    print("###############################################################")
-    print("Team AA Results")
-    print(res_team_AA)
-    # curr_medals += count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo)
-    #curr_medals /= 10000 # average medals for curr combo
-    # return curr_medals
+        indiv_app_qual, indiv_AA_qual, team_AA_qual = sim_qual(curr_combo, us_data, country_data, rem_data, gender)
+        # simulate finals and count medals won by team USA players in each event
+        res_indiv_app = sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_data, gender)
+        print("###################################################")
+        print("Individual App Results")
+        print(res_indiv_app)
+        res_indiv_AA = sim_indiv_AA_final(curr_combo, indiv_AA_qual, us_data, country_data, rem_data, gender)
+        print("###################################################")
+        print("Individual AA Results")
+        print(res_indiv_AA)
+        res_team_AA = sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data, gender)
+        print("###################################################")
+        print("Team AA Results")
+        print(res_team_AA)
+        curr_medals += count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo)
+    curr_medals /= 10 # average medals for curr combo
+    # print(curr_medals)
+    return math.ceil(curr_medals)
 
-def sim_wrapper(gender):
-    unique_athletes = us_data['FullName'].unique()
-    combos_list = combinations(unique_athletes, 4)
-    max_medals = 0
-    max_combo = None
-    for curr_combo in combos_list:
-        curr_medals = sim_all(curr_combo, us_data, qual_country_data, rem_data, gender)
-        if curr_medals > max_medals:
-            max_medals = curr_medals
-            max_combo = curr_combo
-    return(max_combo, max_medals)
+# def sim_wrapper(gender):
+#     unique_athletes = us_data['FullName'].unique()
+#     combos_list = combinations(unique_athletes, 4)
+#     max_medals = 0
+#     max_combo = None
+#     for curr_combo in combos_list:
+#         curr_medals = sim_all(curr_combo, us_data, qual_country_data, rem_data, gender)
+#         if curr_medals > max_medals:
+#             max_medals = curr_medals
+#             max_combo = curr_combo
+#     return(max_combo, max_medals)
 
 def greatest_wrapper_of_all():
-    w_results = sim_wrapper('w')
-    m_results = sim_wrapper('m')
-    print(f"Women's Team: {w_results[0][0]}")
-    print(f"Women's Medals: {w_results[0][1]}")
-    print(f"Men's Team: {m_results[1][0]}")
-    print(f"Men's Medals: {m_results[1][1]}")
+    w_results = sim_all(us_team_w, us_data, qual_country_data, rem_data, 'w')
+    m_results = sim_all(us_team_m, us_data, qual_country_data, rem_data, 'm')
+    # print(f"Women's Team: {w_results}")
+    print(f"Women's Medals: {w_results}")
+    # print(f"Men's Team: {m_results}")
+    print(f"Men's Medals: {m_results}")
     return
 
-# greatest_wrapper_of_all()
+us_team_w = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones"]
+us_team_m = ['Shane Wiskus', 'Paul Juda', 'Yul Moldauer', 'Frederick Richard', 'Donnell Whittenburg']
+
+greatest_wrapper_of_all()
+
+# ['Ciena Alipio' 'Leigh Anne elliott' 'Sydney Barros' 'Simone Biles'
+#  'Skye Blakely' 'Charlotte Booth' 'Jade Carey' 'Dulcy Caylor'
+#  'Jordan Chiles' 'Chloe Cho' 'Norah Christian' 'Adriana Consoli'
+#  'Kayla Dicello' 'Amelia Disidore' 'Gabby Disidore' 'Skylar Draser'
+#  'Amari Drayton' 'Jordis Eichman' 'Addison Fatta' 'eMjae Frazier'
+#  'Karis German' 'Olivia Greaves' 'Madray Johnson' 'Shilese Jones'
+#  'Katelyn Jong' 'Levi Jung-ruivivar' 'Avery King' 'Sunisa Lee' 'Myli Lew'
+#  'Kaliya Lincoln' 'Lauren Little' 'Eveylynn Lowe' 'Nola Matthews'
+#  'Nola Rhianne Matthews' 'Konnor Mcclain' 'Zoe Miller' 'Annalisa Milton'
+#  'Malea Milton' 'Avery Moll' 'Kaylen Morgan' 'Elle Mueller' 'Ella Murphy'
+#  'Marissa Neal' 'Brooke Pierson' 'Michelle Pineda' 'Christiane Popovich'
+#  'Camryn Richardson' 'Joscelyn Roberson' 'Joscelyn Michelle Roberson'
+#  'Katelyn Rosen' 'Ashlee Sullivan' 'Tiana Sumanasekera' 'Brynn Torry'
+#  'Gabriella Van frayen' 'Paityn Walker' 'Leanne Wong' 'Kelise Woolford'
+#  'Lexi Zeiss' 'Alicia Zhou']
 
 #######################################################################################################################
 # sim_indiv_app((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_indiv_AA((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_team_AA((qual_country_data, rem_data, us_data), 'w', us_team)
 
-us_team = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones"]
-
+# us_team_w = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones"]
+# us_team_m = ['Shane Wiskus', 'Paul Juda', 'Yul Moldauer', 'Frederick Richard', 'Donnell Whittenburg']
 #######################################################################################################################
 
-sim_all(us_team, us_data, qual_country_data, rem_data, 'w')
+# sim_all(us_team_w, us_data, qual_country_data, rem_data, 'w')
+# sim_all(us_team_m, us_data, qual_country_data, rem_data, 'm')
 
-
+# future
+# consider weighting more recent scores?
+# tie breaking
+# sample by rounds
+# mix model
+# include known qualifiers
+# weighted medals
