@@ -15,8 +15,10 @@ data['LastName'] = data['LastName'].str.lower().str.capitalize()
 # combine first and last name
 data['FullName'] = data['FirstName'] + ' ' + data['LastName']
 
-# special case for French gymast entered under two different names
+# getting rid of middle names for duplicates
 data.replace("Melanie De jesus dos santos", "Melanie Jesus santos", inplace=True)
+data.replace('Nola Rhianne Matthews', 'Nola Matthews', inplace=True)
+data.replace("Joscelyn Michelle Roberson", "Joscelyn Roberson", inplace=True)
 
 data['Country'].replace("ENG", "GBR", inplace=True) #both GBR and ENG should be GBR
 data['Country'].replace("GE1", "GER", inplace=True) #both GE1 and GER should be GER
@@ -24,8 +26,7 @@ data['Country'].replace("GE1", "GER", inplace=True) #both GE1 and GER should be 
 data['Apparatus'].replace("hb", "HB", inplace=True) #hb should be HB for consistency
 
 # combining VT1 and VT2 into VT
-data['Apparatus'].replace("VT1", "VT", inplace=True)
-data['Apparatus'].replace("VT2", "VT", inplace=True)
+data['Apparatus'].replace({"VT1": "VT", "VT2": "VT"}, inplace=True)
 
 
 # qualifying countries from the 51st and 52nd FIG World Champs, excluding USA
@@ -55,6 +56,24 @@ for c in qual_countries_m:
         athletes_scores = world_data_2023[(world_data_2023["Country"]==c) & (world_data_2023["Gender"] == 'm')]
         athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(4).index
     qual_athletes_m += list(athletes)
+
+# for c in qual_countries_w:
+#   # unique athletes from country
+#     athletes = data[(data["Country"]==c) & (data["Gender"] == 'w')]['FullName'].unique()
+#     if len(athletes) > 4:
+#       # filtering for top 4 athletes from the country that won --> all scores
+#       # getting mean and taking top 4
+#         athletes_scores = data[(data["Country"]==c) & (data["Gender"] == 'w')]
+#         athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(4).index
+#     qual_athletes_w += list(athletes)
+
+# # same as above but for mens
+# for c in qual_countries_m:
+#     athletes = data[(data["Country"]==c) & (data["Gender"] == 'm')]['FullName'].unique()
+#     if len(athletes) > 4:
+#         athletes_scores = data[(data["Country"]==c) & (data["Gender"] == 'm')]
+#         athletes = athletes_scores.groupby('FullName')['Score'].mean().nlargest(4).index
+#     qual_athletes_m += list(athletes)
 
 # removing all rows with no name or no score
 data = data.dropna(subset=['FullName', 'Score'])
@@ -526,26 +545,26 @@ def sim_all(curr_combo, us_data, country_data, rem_data, gender):
     country_data = country_data[country_data['Gender'] == gender]
     rem_data = rem_data[rem_data["Gender"] == gender]
     curr_medals = 0
-    for i in range(10):
+    for _ in range(1):
     # store qualifying round data
         indiv_app_qual, indiv_AA_qual, team_AA_qual = sim_qual(curr_combo, us_data, country_data, rem_data, gender)
         # simulate finals and count medals won by team USA players in each event
         res_indiv_app = sim_indiv_app_final(curr_combo, indiv_app_qual, us_data, country_data, rem_data, gender)
-        print("###################################################")
-        print("Individual App Results")
+        # print("###################################################")
+        # print("Individual App Results")
         print(res_indiv_app)
         res_indiv_AA = sim_indiv_AA_final(curr_combo, indiv_AA_qual, us_data, country_data, rem_data, gender)
-        print("###################################################")
-        print("Individual AA Results")
-        print(res_indiv_AA)
+        # print("###################################################")
+        # print("Individual AA Results")
+        # print(res_indiv_AA)
         res_team_AA = sim_team_AA_final(curr_combo, team_AA_qual, us_data, country_data, rem_data, gender)
-        print("###################################################")
-        print("Team AA Results")
-        print(res_team_AA)
+        # print("###################################################")
+        # print("Team AA Results")
+        # print(res_team_AA)
         curr_medals += count_medals(res_indiv_app, res_indiv_AA, res_team_AA, curr_combo)
-    curr_medals /= 10 # average medals for curr combo
-    # print(curr_medals)
-    return math.ceil(curr_medals)
+    curr_medals /= 1 # average medals for curr combo
+    # print(curr_medals
+    return curr_medals
 
 # def sim_wrapper(gender):
 #     unique_athletes = us_data['FullName'].unique()
@@ -560,18 +579,22 @@ def sim_all(curr_combo, us_data, country_data, rem_data, gender):
 #     return(max_combo, max_medals)
 
 def greatest_wrapper_of_all():
+    # for us_team_w in list((combinations(us_contenders, 4))):
+    #     if 'Simone Biles' in us_team_w and 'Konnor Mcclain' in us_team_w:
+    #         print(us_team_w)
     w_results = sim_all(us_team_w, us_data, qual_country_data, rem_data, 'w')
-    m_results = sim_all(us_team_m, us_data, qual_country_data, rem_data, 'm')
+    # m_results = sim_all(us_team_m, us_data, qual_country_data, rem_data, 'm')
     # print(f"Women's Team: {w_results}")
     print(f"Women's Medals: {w_results}")
     # print(f"Men's Team: {m_results}")
-    print(f"Men's Medals: {m_results}")
+    # print(f"Men's Medals: {m_results}")
     return
 
-us_team_w = ["Simone Biles", "Skye Blakely", "Jordan Chiles", "Shilese Jones"]
+
+us_team_w = ['Simone Biles', 'Shilese Jones', 'Jade Carey', 'Konnor Mcclain']
 us_team_m = ['Shane Wiskus', 'Paul Juda', 'Yul Moldauer', 'Frederick Richard', 'Donnell Whittenburg']
 
-greatest_wrapper_of_all()
+us_women = us_data[us_data["Gender"] == 'w']["FullName"].unique().tolist()
 
 # ['Ciena Alipio' 'Leigh Anne elliott' 'Sydney Barros' 'Simone Biles'
 #  'Skye Blakely' 'Charlotte Booth' 'Jade Carey' 'Dulcy Caylor'
@@ -589,7 +612,19 @@ greatest_wrapper_of_all()
 #  'Gabriella Van frayen' 'Paityn Walker' 'Leanne Wong' 'Kelise Woolford'
 #  'Lexi Zeiss' 'Alicia Zhou']
 
-#######################################################################################################################
+
+us_contenders = ['Simone Biles', 'Shilese Jones',
+                 'Skye Blakely', 'Jordan Chiles', 'Jade Carey', 
+                 'Kayla Dicello', 'Konnor Mcclain',
+                 'Addison Fatta', 'Zoe Miller', 'Gabby Disidore']
+
+# ('Simone Biles', 'Shilese Jones', 'Jade Carey', 'Konnor Mcclain')
+
+# print(item for item in list(combinations(us_contenders, 4)) if 'Simone Biles' in item)
+# print((us_data['FullName'].value_counts()))
+greatest_wrapper_of_all()
+
+#####################################################################################################################
 # sim_indiv_app((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_indiv_AA((qual_country_data, rem_data, us_data), 'w', us_team)
 # sim_team_AA((qual_country_data, rem_data, us_data), 'w', us_team)
