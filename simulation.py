@@ -2,9 +2,8 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 import matplotlib.pyplot as plt
-import math
 
-og_data = pd.read_csv('test.csv')
+og_data = pd.read_csv('preprocess.csv')
 data = pd.read_csv('distinct_apps_sim.csv')
 
 # Country,Apparatus,Gender,FullName,sim_1,sim_2,sim_3, ...
@@ -662,7 +661,9 @@ def sim_wrapper(gender):
     if gender == 'm':
         combos = list((combinations(qual_USA_m, 4)))
         for us_team_m in combos:
+            print(us_team_m)
             m_results = sim_all(us_team_m, data, 'm')
+            print(m_results)
             if m_results > max_medals:
                 max_medals = m_results
                 max_combo = us_team_m
@@ -672,9 +673,9 @@ def sim_wrapper(gender):
 
 def greatest_wrapper_of_all():
 
-    (w_results, w_medals) = sim_wrapper('w')
-    print(f"Women's Team: {w_results}")
-    print(f"Women's Medals: {w_medals}")
+    # (w_results, w_medals) = sim_wrapper('w')
+    # print(f"Women's Team: {w_results}")
+    # print(f"Women's Medals: {w_medals}")
 
     (m_results, m_medals) = sim_wrapper('m')
     print(f"Men's Team: {m_results}")
