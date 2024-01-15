@@ -49,4 +49,4 @@ data = data.dropna(subset=['FullName', 'Score'])
 data = data[['Gender', 'Competition', 'Round', 'Country', 'Apparatus', 'Score', 'FullName']]
 data = data.drop_duplicates()
 
-data.to_csv('test.csv', index=False)
+data.to_csv('preprocess.csv', index=False)

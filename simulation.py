@@ -76,8 +76,6 @@ USA_athletes_m = USA_athletes_scores_m.groupby('FullName')['Score'].mean().nlarg
 
 qual_USA_m = list(USA_athletes_m)
 
-print(qual_USA_m)
-print(qual_USA_w)
 #######################################################################################################################
 
 # dictionary for individual 36 athletes
@@ -664,9 +662,7 @@ def sim_wrapper(gender):
     if gender == 'm':
         combos = list((combinations(qual_USA_m, 4)))
         for us_team_m in combos:
-            print(us_team_m)
             m_results = sim_all(us_team_m, data, 'm')
-            print
             if m_results > max_medals:
                 max_medals = m_results
                 max_combo = us_team_m
