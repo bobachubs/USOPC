@@ -12,7 +12,7 @@ data['LastName'] = data['LastName'].str.lower().str.capitalize()
 # combine first and last name
 data['FullName'] = data['FirstName'] + ' ' + data['LastName']
 
-# getting rid of middle names for duplicates for top contenders
+# making names consistent for top contenders in the simulation
 data.replace("Melanie De jesus dos santos", "Melanie Jesus santos", inplace=True)
 data.replace('Nola Rhianne Matthews', 'Nola Matthews', inplace=True)
 data.replace("Joscelyn Michelle Roberson", "Joscelyn Roberson", inplace=True)
