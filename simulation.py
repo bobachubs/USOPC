@@ -784,9 +784,9 @@ def sim_wrapper(gender):
         combos = list((combinations(qual_USA_m, 4)))
         for us_team_m in combos:
             if 'Curran Phillips' in us_team_m:
-                print(us_team_m)
+                # print(us_team_m)
                 m_results = sim_all(us_team_m, data, 'm')
-                print(m_results)
+                # print(m_results)
                 if m_results > max_medals:
                     max_medals = m_results
                     max_combo = us_team_m
